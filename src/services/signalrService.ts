@@ -1,5 +1,6 @@
 import * as signalR from '@microsoft/signalr';
 import { MetricsData } from '../types';
+import { API_BASE } from '../api';
 
 class SignalRService {
   private hubConnection: signalR.HubConnection | null = null;
@@ -17,8 +18,9 @@ class SignalRService {
 
     this.isConnecting = true;
     try {
+      const hubUrl = API_BASE ? `${API_BASE.replace(/\/$/, '')}/hubs/dashboard` : '/hubs/dashboard';
       this.hubConnection = new signalR.HubConnectionBuilder()
-        .withUrl('/hubs/dashboard', {
+        .withUrl(hubUrl, {
           accessTokenFactory: () => localStorage.getItem('accessToken') || '',
         })
         .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
