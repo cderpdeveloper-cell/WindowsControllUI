@@ -137,7 +137,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {computers.map((comp) => (
+                {computers.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 13 }}>No Windows endpoints connected yet.</span>
+                        <button className="btn btn-primary btn-sm" onClick={onOpenEnrollment}>
+                          + Enroll First Computer
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  computers.map((comp) => (
                   <tr
                     key={comp.id}
                     onClick={() => onSelectComputer(comp)}
@@ -196,7 +208,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                       </button>
                     </td>
                   </tr>
-                ))}
+                ))
+              )}
               </tbody>
             </table>
           </div>
@@ -215,7 +228,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, overflowY: 'auto' }}>
-            {alerts.slice(0, 5).map((alert) => (
+            {alerts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)', fontSize: 13 }}>
+                ✅ All systems nominal. No active alerts.
+              </div>
+            ) : (
+              alerts.slice(0, 5).map((alert) => (
               <div
                 key={alert.id}
                 style={{
@@ -257,7 +275,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   <span>{new Date(alert.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
         </div>
       </div>

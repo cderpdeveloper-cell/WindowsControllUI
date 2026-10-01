@@ -65,6 +65,20 @@ class SignalRService {
     };
   }
 
+  public onAgentOnline(callback: (agentId: string) => void) {
+    this.computerOnlineListeners.push(callback);
+    return () => {
+      this.computerOnlineListeners = this.computerOnlineListeners.filter((l) => l !== callback);
+    };
+  }
+
+  public onAgentOffline(callback: (agentId: string) => void) {
+    this.computerOfflineListeners.push(callback);
+    return () => {
+      this.computerOfflineListeners = this.computerOfflineListeners.filter((l) => l !== callback);
+    };
+  }
+
   public onCommandResult(callback: (commandId: string, result: string, success: boolean) => void) {
     this.commandResultListeners.push(callback);
     return () => {

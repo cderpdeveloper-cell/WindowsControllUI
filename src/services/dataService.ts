@@ -469,88 +469,164 @@ export const MOCK_AUDIT_LOGS: AuditLog[] = [
   { id: 'log-5', timestamp: new Date(Date.now() - 24 * 3600 * 1000).toISOString(), action: 'UserLoginSuccess', category: 'Authentication', details: 'Admin logged in via TOTP 2FA', userName: 'admin@contoso.local', ipAddress: '192.168.1.100', success: true },
 ];
 
+export function mapApiSummaryToComputer(c: any): Computer {
+  const isOnline = Boolean(c.isOnline);
+  let status: 'Online' | 'Offline' | 'Warning' | 'Error' = isOnline ? 'Online' : 'Offline';
+  if (c.status === 3 || c.status === 'Warning') status = 'Warning';
+  if (c.status === 4 || c.status === 'Critical' || c.status === 'Error') status = 'Error';
+
+  return {
+    id: c.id,
+    organizationId: c.organizationId || '',
+    computerName: c.computerName || 'Windows Endpoint',
+    domainName: c.domain || c.domainName || 'WORKGROUP',
+    isDomainJoined: Boolean(c.domain),
+    ipAddress: c.ipAddress || '—',
+    macAddress: c.macAddress || '—',
+    publicIpAddress: c.publicIpAddress || '',
+    osName: c.osName || 'Windows',
+    osVersion: c.osVersion || '',
+    osBuild: c.osBuild || '',
+    osEdition: c.osEdition || '',
+    architecture: c.osArchitecture || 'x64',
+    uptimeSeconds: c.uptimeSeconds || 0,
+    status,
+    isOnline,
+    lastHeartbeatAt: c.lastSeenAt || c.lastHeartbeatAt,
+    createdAt: c.createdAt || new Date().toISOString(),
+    agent: {
+      agentId: c.agent?.agentId || c.id,
+      version: c.agentVersion || c.agent?.version || '1.0.0',
+      status: isOnline ? 'Connected' : 'Disconnected',
+    },
+    metrics: {
+      computerId: c.id,
+      timestamp: new Date().toISOString(),
+      cpuUsagePercent: c.lastCpuPercent ?? c.metrics?.cpuUsagePercent ?? 0,
+      memoryUsagePercent: c.lastMemoryPercent ?? c.metrics?.memoryUsagePercent ?? 0,
+      memoryUsedBytes: c.metrics?.memoryUsedBytes ?? 0,
+      memoryTotalBytes: c.metrics?.memoryTotalBytes ?? 16000000000,
+      diskUsagePercent: c.lastDiskPercent ?? c.metrics?.diskUsagePercent ?? 0,
+      diskFreeBytes: c.metrics?.diskFreeBytes ?? 0,
+      diskTotalBytes: c.metrics?.diskTotalBytes ?? 500000000000,
+      networkSentKbps: c.metrics?.networkSentKbps ?? 0,
+      networkReceivedKbps: c.metrics?.networkReceivedKbps ?? 0,
+      processCount: c.metrics?.processCount ?? 0,
+      threadCount: c.metrics?.threadCount ?? 0,
+      handleCount: c.metrics?.handleCount ?? 0,
+    },
+  };
+}
+
 export const dataService = {
   async getComputers(): Promise<Computer[]> {
     try {
       const res = await computersApi.list();
-      if (res.data && res.data.items && res.data.items.length > 0) {
-        return res.data.items;
+      if (res.data && Array.isArray(res.data.items)) {
+        return res.data.items.map(mapApiSummaryToComputer);
       }
-    } catch {
-      // Fallback
+      if (Array.isArray(res.data)) {
+        return res.data.map(mapApiSummaryToComputer);
+      }
+    } catch (err) {
+      console.warn('Could not fetch computers from API:', err);
     }
-    return MOCK_COMPUTERS;
+    return [];
   },
 
   async getComputer(id: string): Promise<Computer | undefined> {
     try {
       const res = await computersApi.get(id);
-      if (res.data) return res.data;
-    } catch {
-      // Fallback
+      if (res.data) {
+        return mapApiSummaryToComputer(res.data);
+      }
+    } catch (err) {
+      console.warn('Could not fetch computer details:', err);
     }
-    return MOCK_COMPUTERS.find((c) => c.id === id);
+    return undefined;
   },
 
   async getDashboardStats(): Promise<DashboardStats> {
     try {
       const res = await computersApi.dashboard();
-      if (res.data) return res.data;
-    } catch {
-      // Fallback
+      if (res.data) {
+        const d = res.data;
+        return {
+          totalComputers: d.totalComputers ?? 0,
+          onlineComputers: d.onlineComputers ?? 0,
+          offlineComputers: d.offlineComputers ?? 0,
+          warningComputers: d.warningAlerts ?? 0,
+          activeAlertsCount: (d.warningAlerts ?? 0) + (d.criticalAlerts ?? 0),
+          avgCpuPercent: d.avgCpu ? Math.round(d.avgCpu * 10) / 10 : 0,
+          avgMemoryPercent: d.avgMemory ? Math.round(d.avgMemory * 10) / 10 : 0,
+          recentAlerts: Array.isArray(d.recentAlerts)
+            ? d.recentAlerts.map((a: any) => ({
+                id: a.id,
+                computerId: a.computerId || '',
+                computerName: a.computerName || 'Endpoint',
+                title: a.title || 'System Alert',
+                severity: a.severity === 2 ? 'Critical' : a.severity === 1 ? 'Warning' : 'Info',
+                status: a.status === 2 ? 'Resolved' : a.status === 1 ? 'Acknowledged' : 'Active',
+                createdAt: a.createdAt || new Date().toISOString(),
+              }))
+            : [],
+        };
+      }
+    } catch (err) {
+      console.warn('Could not fetch dashboard stats:', err);
     }
-    const online = MOCK_COMPUTERS.filter((c) => c.isOnline).length;
-    const warning = MOCK_COMPUTERS.filter((c) => c.status === 'Warning').length;
-    const offline = MOCK_COMPUTERS.filter((c) => !c.isOnline).length;
     return {
-      totalComputers: MOCK_COMPUTERS.length,
-      onlineComputers: online,
-      offlineComputers: offline,
-      warningComputers: warning,
-      activeAlertsCount: MOCK_ALERTS.filter((a) => a.status === 'Active').length,
-      avgCpuPercent: 45.4,
-      avgMemoryPercent: 63.0,
-      recentAlerts: MOCK_ALERTS.slice(0, 5),
+      totalComputers: 0,
+      onlineComputers: 0,
+      offlineComputers: 0,
+      warningComputers: 0,
+      activeAlertsCount: 0,
+      avgCpuPercent: 0,
+      avgMemoryPercent: 0,
+      recentAlerts: [],
     };
   },
 
   async getAlerts(): Promise<Alert[]> {
     try {
       const res = await alertsApi.list();
-      if (res.data && res.data.items) return res.data.items;
-    } catch {
-      // Fallback
+      if (res.data && Array.isArray(res.data.items)) return res.data.items;
+      if (Array.isArray(res.data)) return res.data;
+    } catch (err) {
+      console.warn('Could not fetch alerts:', err);
     }
-    return MOCK_ALERTS;
+    return [];
   },
 
   async getAlertRules(): Promise<AlertRule[]> {
     try {
       const res = await alertsApi.rules();
-      if (res.data) return res.data;
-    } catch {
-      // Fallback
+      if (res.data && Array.isArray(res.data)) return res.data;
+    } catch (err) {
+      console.warn('Could not fetch alert rules:', err);
     }
-    return MOCK_ALERT_RULES;
+    return [];
   },
 
   async getEnrollmentCodes(): Promise<EnrollmentCode[]> {
     try {
       const res = await agentsApi.listCodes();
-      if (res.data && res.data.items) return res.data.items;
-    } catch {
-      // Fallback
+      if (res.data && Array.isArray(res.data.items)) return res.data.items;
+      if (Array.isArray(res.data)) return res.data;
+    } catch (err) {
+      console.warn('Could not fetch enrollment codes:', err);
     }
-    return MOCK_ENROLLMENT_CODES;
+    return [];
   },
 
   async getAuditLogs(): Promise<AuditLog[]> {
     try {
       const res = await auditApi.list();
-      if (res.data && res.data.items) return res.data.items;
-    } catch {
-      // Fallback
+      if (res.data && Array.isArray(res.data.items)) return res.data.items;
+      if (Array.isArray(res.data)) return res.data;
+    } catch (err) {
+      console.warn('Could not fetch audit logs:', err);
     }
-    return MOCK_AUDIT_LOGS;
+    return [];
   },
 };

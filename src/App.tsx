@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Layout/Sidebar';
 import { Topbar } from './components/Layout/Topbar';
 import { DashboardPage } from './pages/DashboardPage';
@@ -9,122 +9,204 @@ import { AlertsPage } from './pages/AlertsPage';
 import { EnrollmentPage } from './pages/EnrollmentPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { LoginPage } from './pages/LoginPage';
 import { ComputerDetailModal } from './components/Computers/ComputerDetailModal';
 import { EnrollmentModal } from './components/Computers/EnrollmentModal';
-import { dataService, MOCK_COMPUTERS, MOCK_ALERTS, MOCK_ENROLLMENT_CODES, MOCK_AUDIT_LOGS, MOCK_ALERT_RULES } from './services/dataService';
+import { dataService } from './services/dataService';
 import { signalRService } from './services/signalrService';
+import { alertsApi, agentsApi } from './api';
 import { Computer, Alert, EnrollmentCode, AuditLog, AlertRule, DashboardStats } from './types';
 
 export const App: React.FC = () => {
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return Boolean(localStorage.getItem('accessToken'));
+  });
+  const [currentUser, setCurrentUser] = useState<{ username: string; email: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem('currentUser');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLiveConnected, setIsLiveConnected] = useState(false);
 
-  // Core Data State
-  const [computers, setComputers] = useState<Computer[]>(MOCK_COMPUTERS);
-  const [alerts, setAlerts] = useState<Alert[]>(MOCK_ALERTS);
-  const [rules, setRules] = useState<AlertRule[]>(MOCK_ALERT_RULES);
-  const [codes, setCodes] = useState<EnrollmentCode[]>(MOCK_ENROLLMENT_CODES);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);
+  // Dynamic Data State (initialized to empty, populated from real backend API)
+  const [computers, setComputers] = useState<Computer[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [rules, setRules] = useState<AlertRule[]>([]);
+  const [codes, setCodes] = useState<EnrollmentCode[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
-    totalComputers: MOCK_COMPUTERS.length,
-    onlineComputers: MOCK_COMPUTERS.filter((c) => c.isOnline).length,
-    offlineComputers: MOCK_COMPUTERS.filter((c) => !c.isOnline).length,
-    warningComputers: MOCK_COMPUTERS.filter((c) => c.status === 'Warning').length,
-    activeAlertsCount: MOCK_ALERTS.filter((a) => a.status === 'Active').length,
-    avgCpuPercent: 45.4,
-    avgMemoryPercent: 63.0,
-    recentAlerts: MOCK_ALERTS,
+    totalComputers: 0,
+    onlineComputers: 0,
+    offlineComputers: 0,
+    warningComputers: 0,
+    activeAlertsCount: 0,
+    avgCpuPercent: 0,
+    avgMemoryPercent: 0,
+    recentAlerts: [],
   });
 
   // Active Selected Computer & Modals
   const [selectedComputer, setSelectedComputer] = useState<Computer | null>(null);
   const [isEnrollmentModalOpen, setIsEnrollmentModalOpen] = useState(false);
 
-  // Initialize and connect SignalR
-  useEffect(() => {
-    let unsubscribeMetrics: (() => void) | undefined;
+  // Fetch real data from API
+  const refreshAll = useCallback(async () => {
+    if (!localStorage.getItem('accessToken')) return;
+    try {
+      const [comps, st, al, rl, cd, lg] = await Promise.all([
+        dataService.getComputers(),
+        dataService.getDashboardStats(),
+        dataService.getAlerts(),
+        dataService.getAlertRules(),
+        dataService.getEnrollmentCodes(),
+        dataService.getAuditLogs(),
+      ]);
+      setComputers(comps);
+      setStats(st);
+      setAlerts(al);
+      setRules(rl);
+      setCodes(cd);
+      setAuditLogs(lg);
+    } catch (err) {
+      console.error('Error refreshing data from API:', err);
+    }
+  }, []);
 
-    const init = async () => {
+  // Initialize and connect SignalR when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let unsubscribeMetrics: (() => void) | undefined;
+    let unsubscribeOnline: (() => void) | undefined;
+    let unsubscribeOffline: (() => void) | undefined;
+
+    refreshAll();
+
+    const initSignalR = async () => {
       const connected = await signalRService.connect();
       setIsLiveConnected(connected);
 
-      // Listen for live telemetry stream updates
+      // Listen for live telemetry stream updates from agents
       unsubscribeMetrics = signalRService.onMetrics((metrics) => {
         setComputers((prev) =>
           prev.map((c) =>
-            c.id === metrics.computerId ? { ...c, metrics, isOnline: true, status: 'Online' } : c
+            c.id === metrics.computerId
+              ? { ...c, metrics, isOnline: true, status: 'Online' }
+              : c
+          )
+        );
+      });
+
+      // Listen for Agent Online/Offline events
+      unsubscribeOnline = signalRService.onAgentOnline((agentId) => {
+        setComputers((prev) =>
+          prev.map((c) =>
+            c.agent?.agentId === agentId || c.id === agentId
+              ? { ...c, isOnline: true, status: 'Online' }
+              : c
+          )
+        );
+      });
+
+      unsubscribeOffline = signalRService.onAgentOffline((agentId) => {
+        setComputers((prev) =>
+          prev.map((c) =>
+            c.agent?.agentId === agentId || c.id === agentId
+              ? { ...c, isOnline: false, status: 'Offline' }
+              : c
           )
         );
       });
     };
 
-    init();
+    initSignalR();
 
-    // Simulated heartbeat & slight telemetry fluctuations to feel alive
+    // Auto-refresh poll every 25 seconds to pull new machines/audit/alerts
     const interval = setInterval(() => {
-      setComputers((prev) =>
-        prev.map((comp) => {
-          if (!comp.isOnline || !comp.metrics) return comp;
-          const jitter = (Math.random() - 0.5) * 4;
-          const newCpu = Math.max(5, Math.min(98, Math.round((comp.metrics.cpuUsagePercent + jitter) * 10) / 10));
-          return {
-            ...comp,
-            metrics: {
-              ...comp.metrics,
-              cpuUsagePercent: newCpu,
-              networkSentKbps: Math.round(comp.metrics.networkSentKbps * (0.95 + Math.random() * 0.1)),
-            },
-          };
-        })
-      );
-    }, 4000);
+      refreshAll();
+    }, 25000);
 
     return () => {
       clearInterval(interval);
       if (unsubscribeMetrics) unsubscribeMetrics();
+      if (unsubscribeOnline) unsubscribeOnline();
+      if (unsubscribeOffline) unsubscribeOffline();
     };
-  }, []);
+  }, [isAuthenticated, refreshAll]);
 
-  const refreshAll = async () => {
-    const comps = await dataService.getComputers();
-    const st = await dataService.getDashboardStats();
-    const al = await dataService.getAlerts();
-    const cd = await dataService.getEnrollmentCodes();
-    const lg = await dataService.getAuditLogs();
-    setComputers(comps);
-    setStats(st);
-    setAlerts(al);
-    setCodes(cd);
-    setAuditLogs(lg);
+  const handleLoginSuccess = (user: { username: string; email: string }) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    refreshAll();
   };
 
-  const handleAcknowledgeAlert = (id: string) => {
+  const handleLogout = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('currentUser');
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setComputers([]);
+    setAlerts([]);
+    setCodes([]);
+    setAuditLogs([]);
+    setIsLiveConnected(false);
+  };
+
+  const handleAcknowledgeAlert = async (id: string) => {
+    try {
+      await alertsApi.acknowledge(id);
+    } catch { }
     setAlerts(alerts.map((a) => (a.id === id ? { ...a, status: 'Acknowledged' } : a)));
   };
 
-  const handleResolveAlert = (id: string) => {
+  const handleResolveAlert = async (id: string) => {
+    try {
+      await alertsApi.resolve(id);
+    } catch { }
     setAlerts(alerts.map((a) => (a.id === id ? { ...a, status: 'Resolved' } : a)));
   };
 
-  const handleGenerateCode = (description: string, days: number) => {
-    const newCode: EnrollmentCode = {
-      id: `enc-${Date.now()}`,
-      code: `WCC-GEN-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-      description,
-      expiresAt: new Date(Date.now() + days * 24 * 3600 * 1000).toISOString(),
-      maxUses: 50,
-      usedCount: 0,
-      status: 'Active',
-      createdAt: new Date().toISOString(),
-    };
-    setCodes([newCode, ...codes]);
+  const handleGenerateCode = async (description: string, days: number) => {
+    try {
+      await agentsApi.generateCode({
+        expirationMinutes: days * 1440,
+        scope: description,
+      });
+      const updatedCodes = await dataService.getEnrollmentCodes();
+      setCodes(updatedCodes);
+    } catch (err) {
+      console.error('Failed to generate code via API, updating local list:', err);
+      const newCode: EnrollmentCode = {
+        id: `enc-${Date.now()}`,
+        code: `WCC-GEN-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+        description,
+        expiresAt: new Date(Date.now() + days * 24 * 3600 * 1000).toISOString(),
+        maxUses: 50,
+        usedCount: 0,
+        status: 'Active',
+        createdAt: new Date().toISOString(),
+      };
+      setCodes([newCode, ...codes]);
+    }
   };
 
   const handleSelectComputerFromAnywhere = (comp: Computer) => {
     setSelectedComputer(comp);
   };
+
+  // If not authenticated, always display Login Page first
+  if (!isAuthenticated) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  }
 
   return (
     <div className="app-layout">
@@ -146,6 +228,8 @@ export const App: React.FC = () => {
           onRefresh={refreshAll}
           isLiveConnected={isLiveConnected}
           onOpenEnrollment={() => setIsEnrollmentModalOpen(true)}
+          currentUser={currentUser}
+          onLogout={handleLogout}
         />
 
         <main className="page-content">

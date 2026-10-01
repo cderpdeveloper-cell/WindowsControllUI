@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Search, Bell, Shield, User, RefreshCw, Radio } from 'lucide-react';
+import { Menu, Search, Bell, Shield, User, RefreshCw, Radio, LogOut } from 'lucide-react';
 
 interface TopbarProps {
   onToggleSidebar: () => void;
@@ -8,6 +8,8 @@ interface TopbarProps {
   onRefresh: () => void;
   isLiveConnected: boolean;
   onOpenEnrollment: () => void;
+  currentUser?: { username: string; email: string } | null;
+  onLogout?: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -17,6 +19,8 @@ export const Topbar: React.FC<TopbarProps> = ({
   onRefresh,
   isLiveConnected,
   onOpenEnrollment,
+  currentUser,
+  onLogout,
 }) => {
   return (
     <header className="topbar">
@@ -98,15 +102,40 @@ export const Topbar: React.FC<TopbarProps> = ({
               justifyContent: 'center',
               color: '#fff',
               fontWeight: 700,
-              fontSize: 13,
+              fontSize: 12,
+              textTransform: 'uppercase',
             }}
           >
-            AD
+            {currentUser?.username?.slice(0, 2) || 'AD'}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Administrator</span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>CONTOSO.LOCAL</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>
+              {currentUser?.username || 'Administrator'}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {currentUser?.email || 'admin@windowscontrolcenter.com'}
+            </span>
           </div>
+
+          {onLogout && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={onLogout}
+              title="Sign Out"
+              style={{
+                marginLeft: 4,
+                padding: '6px 8px',
+                color: 'var(--text-muted)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                cursor: 'pointer',
+              }}
+            >
+              <LogOut size={15} />
+              <span style={{ fontSize: 12 }}>Logout</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

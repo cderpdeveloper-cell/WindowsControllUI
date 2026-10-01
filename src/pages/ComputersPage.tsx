@@ -130,8 +130,50 @@ export const ComputersPage: React.FC<ComputersPageProps> = ({
         </div>
       </div>
 
-      {/* Grid View */}
-      {viewMode === 'grid' ? (
+      {/* Grid or Table or Empty View */}
+      {filtered.length === 0 ? (
+        <div
+          className="card"
+          style={{
+            padding: '54px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 14,
+            borderRadius: 12,
+          }}
+        >
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: '50%',
+              background: 'rgba(59, 130, 246, 0.12)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 28,
+            }}
+          >
+            🖥️
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>
+            {computers.length === 0 ? 'No Windows Endpoints Enrolled' : 'No Matching Computers'}
+          </div>
+          <div style={{ color: 'var(--text-secondary)', maxWidth: 440, fontSize: 13.5, lineHeight: 1.5 }}>
+            {computers.length === 0
+              ? 'Your fleet is currently empty. Run your Windows Agent with your enrollment token to connect and stream live telemetry.'
+              : 'Try clearing your search query or changing your status filter.'}
+          </div>
+          {computers.length === 0 && (
+            <button className="btn btn-primary" onClick={onOpenEnrollment} style={{ marginTop: 8 }}>
+              + Enroll First Computer
+            </button>
+          )}
+        </div>
+      ) : viewMode === 'grid' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {filtered.map((comp) => (
             <div
