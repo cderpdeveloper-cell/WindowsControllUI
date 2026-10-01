@@ -24,7 +24,7 @@ export const EnrollmentModal: React.FC<EnrollmentModalProps> = ({
   const [validityDays, setValidityDays] = useState(30);
 
   const activeCode = codes[0]?.code || 'WCC-CORP-9882-XQ';
-  const serverEndpoint = API_BASE ? API_BASE.replace(/\/$/, '') : 'http://windowscontrolcenterapi.runasp.net';
+  const serverEndpoint = API_BASE ? API_BASE.replace(/\/$/, '') : 'https://windowscontrolcenterapi.runasp.net';
   const installOneLiner = `Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; iex ((New-Object System.Net.WebClient).DownloadString('${serverEndpoint}/api/agents/install.ps1')); Install-WCCAgent -ServerUrl '${serverEndpoint}' -EnrollmentCode '${activeCode}'`;
 
   const copyToClipboard = (text: string, isCode = false) => {

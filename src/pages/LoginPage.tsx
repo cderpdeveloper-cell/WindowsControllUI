@@ -43,7 +43,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         err.response?.data?.title ||
         (err.response?.status === 401 ? 'Invalid email or password.' : null) ||
         (err.message?.includes('Network Error')
-          ? 'Cannot reach API server (http://windowscontrolcenterapi.runasp.net). Ensure CORS and SQL database are online.'
+          ? 'Cannot reach API server (https://windowscontrolcenterapi.runasp.net). Ensure CORS and SQL database are online.'
           : 'Authentication failed. Please verify your credentials.');
       setErrorMessage(serverMsg);
     } finally {

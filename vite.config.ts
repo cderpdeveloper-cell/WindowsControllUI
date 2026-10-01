@@ -8,12 +8,14 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://windowscontrolcenterapi.runasp.net',
+        target: 'https://windowscontrolcenterapi.runasp.net',
         changeOrigin: true,
+        secure: false,
       },
       '/hubs': {
-        target: 'http://windowscontrolcenterapi.runasp.net',
+        target: 'https://windowscontrolcenterapi.runasp.net',
         ws: true,
+        secure: false,
       },
     },
   },

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Settings, Shield, Server, Database, Save, Check } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
-  const [serverUrl, setServerUrl] = useState('http://windowscontrolcenterapi.runasp.net');
+  const [serverUrl, setServerUrl] = useState('https://windowscontrolcenterapi.runasp.net');
   const [telemetryInterval, setTelemetryInterval] = useState(15);
   const [heartbeatTimeout, setHeartbeatTimeout] = useState(60);
   const [orgName, setOrgName] = useState('Contoso Enterprise Systems');
